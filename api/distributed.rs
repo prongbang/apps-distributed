@@ -1,6 +1,6 @@
 use reqwest::header;
 use serde::{Deserialize, Serialize};
-use apps_distributed::{get_kv_api_token, get_kv_api_url, response_bad_request, response_ok};
+use apps_distributed::{get_api_key, get_kv_api_token, get_kv_api_url, get_query, response_bad_request, response_forbidden, response_ok};
 use vercel_runtime::{run, Body, Error, Request, Response};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -22,14 +22,21 @@ async fn main() -> Result<(), Error> {
 }
 
 pub async fn handler(req: Request) -> Result<Response<Body>, Error> {
-    let url = get_kv_api_url();
-    let mut headers = header::HeaderMap::new();
-    headers.insert(header::AUTHORIZATION, format!("Bearer {}", get_kv_api_token()).parse().unwrap());
-    let client = reqwest::Client::builder()
-        .default_headers(headers)
-        .build()?;
+    let api_key = get_api_key();
+    let key = get_query(&req, "key");
+
+    if api_key != key || key.is_empty() {
+        return Ok(response_forbidden("Forbidden"));
+    }
 
     if req.method() == "POST" {
+        let url = get_kv_api_url();
+        let mut headers = header::HeaderMap::new();
+        headers.insert(header::AUTHORIZATION, format!("Bearer {}", get_kv_api_token()).parse().unwrap());
+        let client = reqwest::Client::builder()
+            .default_headers(headers)
+            .build()?;
+
         let body = req.body();
         let full_body = body.as_ref();
         let data = serde_json::from_slice::<DistributedRequest>(full_body)?;
